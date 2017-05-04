@@ -1,0 +1,327 @@
+Node
+Express
+Handlebars
+Knex
+Postgres
+# Create server
+1. express --git --hbs
+ - creates a .gitignore for you
+ - sets view engine as Handlebars
+2. Install dependencies
+ - npm install
+ - npm install --save knex pg
+ - knex init
+3. npm start
+ - or __nodemon__ to start server
+# Set up database
+### Create DB
+1. createdb todo_list
+2. In the Knexfile.js
+ - Set client to postgres
+ - Set connection for newly created, local database
+```
+development: {
+  client: 'postgresql',
+  connection: 'postgres://localhost/todo_list'
+},
+```
+3. Wipe out everything below this -- for now.
+### Create table
+1. knex migrate:make 01_todo_list
+2. Edit the newly created migration file to have:
+  - Required (notNullable) fields of proper type
+  - Any default values
+  ```
+    exports.up = function(knex, Promise) {
+      return knex.schema.createTable("todo", (table) => {
+        table.increments();
+        table.text("title").notNullable();
+        table.integer("priority").notNullable();
+        table.text("description");
+        table.boolean("done").defaultTo(false).notNullable();
+        table.datetime("date").notNullable();
+      });
+    };
+    exports.down = function(knex, Promise) {
+      knex.schema.dropTable("todo");
+    };
+  ```
+3. knex migrate:latest
+  - confirm further by:
+    1. psql todo_list
+    2. __\dt__
+    3. __\d todo__
+### Seed table
+1. knex seed:make 01_todo
+2. Edit the newly created seed file:
+  - Change the table_name accordingly
+  - Create seed objects
+ ```
+   exports.seed = function(knex, Promise) {
+     // Deletes ALL existing entries
+     return knex('todo').del()
+       .then(function () {
+         // Inserts seed entries
+         return knex('todo').insert([
+           {
+             title: "Buid a CRUD app",
+             priority: 1,
+             date: new Date()
+           },
+           {  title: "Do the dishes",
+             priority: 3,
+             date: new Date()
+           },
+           {  title: "Render a view",
+             priority: 2,
+             date: new Date()
+           },
+           {  title: "Walk the dog",
+             priority: 5,
+             date: new Date()
+           }
+         ]);
+       });
+   };
+ ```
+ 3. knex seed:run
+   - confirm further by:
+     1. psql todo_list
+     2. select * from todo;
+# List all records with GET/todo
+1. Duplicate index.js within Atom, and name todo.js
+2. Edit routes in app.js
+ - Create router
+  ```
+    //the variable todo is equal to the todo.js router
+  ```
+  var todo = require('./routes/todo');
+ - Configure for use
+  ```
+    //when app.js sees the /todo URL, the express router is to then use the todo router defined above
+  ```
+  app.use('/todo', todo);
+ - Configure todo.js
+   1. Change title to "Todo"
+   2. Check using browser:
+   __localhost:3000/todo__
+3. Create a DB folder
+ - Create knex.js file to use knex to connect to todo_list database.
+  ```
+  const environment = process.env.NODE_ENV || "development";
+  ```
+  // when node runs, if the NODE_ENV variable is set (like in "production" Heroku environment) that environment will be used; otherwise, the "development", local environment.
+4. Create production env in knexfile.js
+  ```
+  production: {
+    client: 'postgresql',
+    connection: process.env.DATABASE_URL + '?ssl=true'
+  },
+  ```
+  - the addition of ?ssl allows for addition of secure migrations/seeds locally
+5. Set the knex.js file to require the proper environment
+  - const config = require("../knexfile")[environment];
+    - grabs an object in knexfile.js
+    - specifies the environment
+6. Create "config" for connecting to database
+  - module.exports = require("knex")(config);
+    - "config" is equal to the whole "development" object in knexfile.js
+    -knex.js file now exports a route
+7. Add new route to todo.js file as active connection to database
+  - const knex = require("../db/knex");
+8. Create a function to get the list of todos
+  - hey knex, goto the todo table, select all the rows,
+  then give back todos, then I want to render all those on a page
+  - let's create a page called "all", where I will have access to _property_ called "todos", with a _value_ in the form of an array of todos I just got back from the database.
+  ```
+  router.get('/', function(req, res, next) {
+    knex("todo")
+    .select()
+    .then(todos => {
+      res.render('all', { todos: todos});
+    });
+  });
+  ```
+9. Create new file all.hbs in Views, so we can actually see the list as we iterate over todos.
+  ```
+    {{#each todos}}
+      <h2>{{title}}</h2>
+    {{/each}}
+  ```
+# Add Bootstrap
+1. Add Bootstrap CDN to layout.hbs (above styles.css)
+  - layout is the container for all the views that will be rendered by HBS.
+2. Change all.hbs to use Bootstap list-group, to it looks better.
+```
+<ul class="list-group">
+  {{#each todos}}
+    <li class="list-group-item">{{title}}</li>
+  {{/each}}
+</ul>
+```
+_note that the {{each}} is placed before the <li>, rather than on the parent <ul> or <ol>_
+3. Add a margin-top: 3em; to the body in styles.css (for readability)
+# Create a form for "new" todos
+### Create a route for "new" page
+- We are generating, so we do not need anything from the database
+- We also do not need to pass anything into the render
+```
+router.get('/new', function(req, res, next) {
+  res.render('new');
+});
+```
+### Create a "new" View
+_to be rendered at /todo/new_
+```
+<form class="form" action="/todo" method="post">
+  <div class="form-group">
+    <label for="title">Title</label>
+    <input type="text" class="form-control" id="title" placeholder="Enter a Todo">
+  </div>
+</form>
+```
+### Create a button on all.hbs page
+- For new todo create/submit action
+- Set class as btn-primary as a css color selection
+- Points to "new" page on click
+_as an <a> tag so it is clickable link_
+```
+<a type="button" class="btn btn-default btn-primary" href="/todo/new">Create New Todo</a>
+```
+### Create textarea in form (new.hbs) for "description"
+```
+<div class="form-group">
+  <label for="description">Description</label>
+  <textarea type="text" class="form-control" id="description" placeholder="Enter a Description">
+  </textarea>
+</div>
+```
+### Create dropdown in form (new.hbs) for "priority"
+```
+<div class="form-group">
+  <label for="priority">Priority</label>
+  <select class="form-control" id="priority">
+    <option>1</option>
+    <option>2</option>
+    <option>3</option>
+    <option>4</option>
+    <option>5</option>
+  </select>
+</div>
+```
+### Create button in form (new.hbs)
+_wound up putting in a <div> to get to render_
+- For "submit"
+  - Form action (POST) is addressed in next section
+- Set class as btn-success as a css color selection
+```
+<button type="button" class="btn btn-default btn-success">Create</button>
+```
+# Create record with POST/Todo
+### Create route in todo.js
+_remember that routes in todo.js are prepemded with /todo_
+1. Create post route
+2. Validate data
+  - Create validation function that returns if:
+    1. Todo title is a string
+    2. Title string is __not__ empty
+    3. Priority __is__ a number
+    ```
+    function validTodo(todo) {
+      return typeof todo.title == "string" &&  todo.title.trim() !== "" && typeof todo.priority == "number";
+    }
+    ```
+# Give the form inputs "name" values
+- Running the above, "as-is" returns an empty object
+- Adding name values solves one problem, __but__
+  - Did require a reboot to see some values
+  - Log shows requirement for date field to be not-null
+- Added "date" to address new log error
+  - Added date to accommodate entry of values to db; discovered above
+  - Not able to set default value to prevent "notNullable" error earlier within knex migrate
+- Though log still throws a 404 error, there should be a new record showing on the index.
+  - Need GET / todo route.
+# Show one record with GET/todo/:id
+See todo.js for '/:id' route function
+- May seem counter-intuitive, but we are working backward, because we want to work with a specific id to get at a single todo...__so__
+  - If (validate that) the id is not undefined
+  - Have knex look in the todo table
+  - Select everything in the row where the id matches the one we want
+    - only care about the first one
+    - render it on the "single"  View
+  - __else__ send back an error
+- Big Picture - we want each of the entries on the "index" page to link to their corresponding "single" View entry
+  - Change the <li> elements on all.hbs to <a> so they are linkable
+  - Add href="/todo/{{id}}" to represent the current todo's id
+### Create "single" View
+1. Create new single.hbs file
+2. Selected panel as "single" output format
+  - Frankenstein'd together  a View but, wound up empty
+    - Added console.log to todo.js "/:id" route to see what todo actually returned
+    - Around 47 minutes, discussion of passing __todo__ to the route above rather than {todo: todo} because the object already contains all the necessary information so as to no hev to add todo. to each of the (4) handlebar items in the "single" View.  Bit/myHead...
+# Show an edit form with GET / todo/:id/edit
+1. Create edit route
+_remember that routes on todo.js prepended by /todo_
+  ```
+  router.get('/:id/edit', function(req, res, next) {
+    res.render('edit');
+  }
+  ```
+2.  Create clickable button on single.hbs
+ - Id edited to interact with Handlebars
+ - For directing to "edit" View, which will be created shortly
+  ```
+  <a href="/todo/{{id}}/edit" type="button" class="btn btn-default btn-warning">Edit todo</a>
+  ```
+  3. Create edit.hbs (duplicate new.hbs)
+    - Give each of the inputs a value=""
+      - Same as their name
+      - in Handlbars format (e.g. value="{{title}}"  )
+    - Change button
+      - Make text Update, rather than Create
+      - Change class to btn-danger (red), rather than btn-success (green)
+4. Want to see data for each record, so need a route to get info from DB
+  - Realize that the router.get('/:id') route contains the same logic, so turn into function
+  - Adjusted 'single' and 'edit' routes to use respondAndRenderTodo function
+  - Title should be updating, but priority not selecting accordingly
+5. Steps taken to deal with priority
+  - Tried setting values on each
+  - Tried changing the input value= to selected=, instead (per SO recomm).
+  - Suggestion to employ 'selected' attribute
+  - Rambling thoughts:
+    - How to address with Handlebars?
+    - Possibly need to use a conditional
+    - Could use JS, but doing server-side rendering, so want to avoid using client-side JS
+  - __Solution:__ found SO post with HBS helper
+    - Required HBS in app.js
+    - Included helper in app.js
+    ```
+    var hbs = require('hbs');
+    hbs.registerHelper('select', function(selected, options) {
+        return options.fn(this).replace(
+            new RegExp(' value=\"' + selected + '\"'),
+            '$& selected="selected"');
+    });
+    ```
+    - Changed elements edit.hbs
+    ```
+    {{#select priority}}
+      <option value="1">1</option>
+      <option value="2">2</option>
+      <option value="3">3</option>
+      <option value="4">4</option>
+      <option value="5">5</option>
+    {{/select}}
+    ```
+# Update record with PUT /todo/:id
+1. Create PUT route to /:id
+2. Create function - refactor
+  - Realize that the router.post('/:id') route contains the same logic, so turn into function, as well
+  - Needs access to request, response, and redirect (URL to)
+    - the redirect replaced by callback function that takes in the (todo)
+    ```
+    callback(todo)
+    ```
+  - date pulled out of function and dealt with as part of PUT request (and affected POST).
+3. Use req.params.id to identify and specify id for redirect
+4. Change to edit.hbs required to accommo
